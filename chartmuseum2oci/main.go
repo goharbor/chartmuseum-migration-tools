@@ -140,7 +140,7 @@ func helmLogin() error {
 	cmd.Stderr = &stdErr
 
 	if err := cmd.Run(); err != nil {
-		return errors.Wrapf(err, "fail to execute helm push' command: %s", stdErr.String())
+		return errors.Wrapf(err, "fail to execute helm login' command: %s", stdErr.String())
 	}
 
 	return nil
@@ -186,7 +186,7 @@ func getHarborProjectChartmuseumCharts(projectName string) ([]HelmChart, error) 
 
 		chartVersions, err := harborClientV2Assist.ChartRepository.GetChartrepoRepoChartsName(context.Background(), params)
 		if err != nil {
-			return nil, errors.Wrapf(err, "fail to get chart %s", *chart.Name)
+			return nil, errors.Wrapf(err, "fail to get chart %s in project %s", *chart.Name, projectName)
 		}
 
 		for _, chartVersion := range chartVersions.Payload {
@@ -225,7 +225,7 @@ func pullChartFromChartmuseum(helmChart HelmChart) error {
 
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, http.NoBody)
 	if err != nil {
-		return errors.Wrapf(err, "fail to pull chart from Chartmuseum")
+		return errors.Wrapf(err, "fail to pull chart from Chartmuseum: %s", url)
 	}
 
 	req.SetBasicAuth(harborUsername, harborPassword)
@@ -234,25 +234,25 @@ func pullChartFromChartmuseum(helmChart HelmChart) error {
 
 	res, err := httpClient.Do(req)
 	if err != nil {
-		return errors.Wrapf(err, "fail to retrieve chart from chartmuseum")
+		return errors.Wrapf(err, "fail to retrieve chart from chartmuseum: %s", url)
 	}
 
 	if res.StatusCode != http.StatusOK {
 		err := fmt.Errorf("received status %d", res.StatusCode) //nolint:goerr113
 
-		return errors.Wrap(err, "fail to retrieve chart from chartmuseum")
+		return errors.Wrapf(err, "fail to retrieve chart from chartmuseum: %s", url)
 	}
 
 	defer res.Body.Close()
 
 	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
-		return errors.Wrapf(err, "fail to read chart body")
+		return errors.Wrapf(err, "fail to read chart body: %s", url)
 	}
 
 	err = os.WriteFile(chartFileName, resBody, fileMode)
 
-	return errors.Wrapf(err, "fail to write chart file to disk")
+	return errors.Wrapf(err, "fail to write chart file to disk: %s", url)
 }
 
 func pushChartToOCI(helmChart HelmChart) error {
@@ -263,7 +263,7 @@ func pushChartToOCI(helmChart HelmChart) error {
 	cmd.Stderr = &stdErr
 
 	if err := cmd.Run(); err != nil {
-		return errors.Wrapf(err, "fail to execute helm push' command: %s", stdErr.String())
+		return errors.Wrapf(err, "fail to execute helm push' command: %s for url: %s and file: %s", stdErr.String(), repoURL, helmChart.ChartFileName())
 	}
 
 	return nil
