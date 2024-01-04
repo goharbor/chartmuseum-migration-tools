@@ -32,3 +32,12 @@ Example:
 ```bash
 docker run -ti --rm goharbor/chartmuseum2oci --url $HARBOR_URL --username $HARBOR_USER --password $HARBOR_PASSWORD --page 2 --pagesize 50
 ```
+
+### Destination path
+
+Using the option `--destpath` a subpath within the project can be specified, in which the charts will be pushed.
+
+In this example, the charts will be pushed into `$HARBOR_URL/$PROJECT/charts`:
+```bash
+docker run -ti --rm goharbor/chartmuseum2oci --url $HARBOR_URL --username $HARBOR_USER --password $HARBOR_PASSWORD --destpath /charts
+```
