@@ -46,6 +46,8 @@ var (
 	harborUsername string //nolint:gochecknoglobals
 	harborPassword string //nolint:gochecknoglobals
 	harborHost     string //nolint:gochecknoglobals
+	page           int64 //nolint:gochecknoglobals
+	pageSize       int64 //nolint:gochecknoglobals
 )
 
 func init() { //nolint:gochecknoinits
@@ -58,6 +60,8 @@ func initFlags() {
 	flag.StringVar(&harborURL, "url", "", "Harbor registry url")
 	flag.StringVar(&harborUsername, "username", "", "Harbor registry username")
 	flag.StringVar(&harborPassword, "password", "", "Harbor registry password")
+	flag.Int64Var(&page, "page", int64(1), "Page")
+	flag.Int64Var(&pageSize, "pagesize", int64(10), "PageSize")
 	flag.Parse()
 
 	if harborURL == "" {
@@ -90,7 +94,7 @@ func initHarborClients() {
 	harborClientV2Assist = harborClientSet.Assist()
 
 	// Check Harbor url and credentials are ok
-	params := &project.ListProjectsParams{} //nolint:exhaustruct
+	params := &project.ListProjectsParams{Page: &page, PageSize: &pageSize} //nolint:exhaustruct
 	if _, err = harborClientV2.Project.ListProjects(context.Background(), params); err != nil {
 		log.Fatal(errors.Wrap(err, "fail to contact Harbor registry, check your credentials"))
 	}
@@ -149,7 +153,7 @@ func helmLogin() error {
 func getHarborChartmuseumCharts() ([]HelmChart, error) {
 	helmCharts := make([]HelmChart, 0)
 
-	params := &project.ListProjectsParams{} //nolint:exhaustruct
+	params := &project.ListProjectsParams{Page: &page, PageSize: &pageSize} //nolint:exhaustruct
 
 	projects, err := harborClientV2.Project.ListProjects(context.Background(), params)
 	if err != nil {

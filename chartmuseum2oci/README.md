@@ -24,3 +24,11 @@ docker build -t goharbor/chartmuseum2oci .
 ```bash
 docker run -ti --rm goharbor/chartmuseum2oci --url $HARBOR_URL --username $HARBOR_USER --password $HARBOR_PASSWORD
 ```
+
+Note: Harbor by default has a hardcoded page size of 10, so the above command only works for the first 10 projects.
+To overcome this issue, the parameters `--page` and `--pagesize` (max. 100) can be added.
+
+Example:
+```bash
+docker run -ti --rm goharbor/chartmuseum2oci --url $HARBOR_URL --username $HARBOR_USER --password $HARBOR_PASSWORD --page 2 --pagesize 50
+```
