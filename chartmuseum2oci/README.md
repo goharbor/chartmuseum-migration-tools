@@ -25,12 +25,12 @@ docker build -t goharbor/chartmuseum2oci .
 docker run -ti --rm goharbor/chartmuseum2oci --url $HARBOR_URL --username $HARBOR_USER --password $HARBOR_PASSWORD
 ```
 
-Note: Harbor by default has a hardcoded page size of 10, so the above command only works for the first 10 projects.
-To overcome this issue, the parameters `--page` and `--pagesize` (max. 100) can be added.
+### Project filtering
 
-Example:
+Using the option `--project` (can be specified multiple times), the migration can be limited to only a particular set of projects, instead of the default behaviour, which is "all at once".
+
 ```bash
-docker run -ti --rm goharbor/chartmuseum2oci --url $HARBOR_URL --username $HARBOR_USER --password $HARBOR_PASSWORD --page 2 --pagesize 50
+docker run -ti --rm goharbor/chartmuseum2oci --url $HARBOR_URL --username $HARBOR_USER --password $HARBOR_PASSWORD --project pr1 --project pr2
 ```
 
 ### Destination path
