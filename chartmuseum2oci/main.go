@@ -32,23 +32,25 @@ func (hc HelmChart) ChartFileName() string {
 	return fmt.Sprintf("%s-%s.tgz", hc.Name, hc.Version)
 }
 
+type ProjectsToMigrateList []string
+
 const (
-	fileMode       = 0o600
-	helmBinaryPath = "helm"
-	timeout        = 5 * time.Second
+	fileMode        = 0o600
+	helmBinaryPath  = "helm"
+	timeout         = 5 * time.Second
+	defaultPageSize = 10
 )
 
 var (
 	harborClientV2       *client.HarborAPI       //nolint:gochecknoglobals
 	harborClientV2Assist *assistClient.HarborAPI //nolint:gochecknoglobals
 
-	harborURL      string //nolint:gochecknoglobals
-	harborUsername string //nolint:gochecknoglobals
-	harborPassword string //nolint:gochecknoglobals
-	harborHost     string //nolint:gochecknoglobals
-	destPath       string //nolint:gochecknoglobals
-	page           int64 //nolint:gochecknoglobals
-	pageSize       int64 //nolint:gochecknoglobals
+	harborURL         string                //nolint:gochecknoglobals
+	harborUsername    string                //nolint:gochecknoglobals
+	harborPassword    string                //nolint:gochecknoglobals
+	harborHost        string                //nolint:gochecknoglobals
+	destPath          string                //nolint:gochecknoglobals
+	projectsToMigrate ProjectsToMigrateList //nolint:gochecknoglobals
 )
 
 func init() { //nolint:gochecknoinits
@@ -62,8 +64,7 @@ func initFlags() {
 	flag.StringVar(&harborUsername, "username", "", "Harbor registry username")
 	flag.StringVar(&harborPassword, "password", "", "Harbor registry password")
 	flag.StringVar(&destPath, "destpath", "", "Destination subpath")
-	flag.Int64Var(&page, "page", int64(1), "Page")
-	flag.Int64Var(&pageSize, "pagesize", int64(10), "PageSize")
+	flag.Var(&projectsToMigrate, "project", "Name of the project(s) to migrate")
 	flag.Parse()
 
 	if harborURL == "" {
@@ -96,7 +97,7 @@ func initHarborClients() {
 	harborClientV2Assist = harborClientSet.Assist()
 
 	// Check Harbor url and credentials are ok
-	params := &project.ListProjectsParams{Page: &page, PageSize: &pageSize} //nolint:exhaustruct
+	params := &project.ListProjectsParams{} //nolint:exhaustruct
 	if _, err = harborClientV2.Project.ListProjects(context.Background(), params); err != nil {
 		log.Fatal(errors.Wrap(err, "fail to contact Harbor registry, check your credentials"))
 	}
@@ -155,20 +156,31 @@ func helmLogin() error {
 func getHarborChartmuseumCharts() ([]HelmChart, error) {
 	helmCharts := make([]HelmChart, 0)
 
-	params := &project.ListProjectsParams{Page: &page, PageSize: &pageSize} //nolint:exhaustruct
+	pageSize := int64(defaultPageSize)
+	for page := int64(1); true; page++ {
+		params := &project.ListProjectsParams{Page: &page, PageSize: &pageSize} //nolint:exhaustruct
 
-	projects, err := harborClientV2.Project.ListProjects(context.Background(), params)
-	if err != nil {
-		log.Fatal(errors.Wrap(err, "fail to list harbor projects"))
-	}
-
-	for _, harborProject := range projects.Payload {
-		projectHelmCharts, err := getHarborProjectChartmuseumCharts(harborProject.Name)
+		projects, err := harborClientV2.Project.ListProjects(context.Background(), params)
 		if err != nil {
-			return nil, errors.Wrapf(err, "fail to migrate charts from project %s", harborProject.Name)
+			log.Fatal(errors.Wrapf(err, "fail to list harbor projects of page %d", page))
 		}
 
-		helmCharts = append(helmCharts, projectHelmCharts...)
+		for _, harborProject := range projects.Payload {
+			if len(projectsToMigrate) > 0 && !projectsToMigrate.Includes(harborProject.Name) {
+				continue
+			}
+
+			projectHelmCharts, err := getHarborProjectChartmuseumCharts(harborProject.Name)
+			if err != nil {
+				return nil, errors.Wrapf(err, "fail to migrate charts from project %s", harborProject.Name)
+			}
+
+			helmCharts = append(helmCharts, projectHelmCharts...)
+		}
+
+		if projects.XTotalCount <= page**params.PageSize {
+			break
+		}
 	}
 
 	return helmCharts, nil
@@ -269,7 +281,7 @@ func pushChartToOCI(helmChart HelmChart) error {
 	cmd.Stderr = &stdErr
 
 	if err := cmd.Run(); err != nil {
-		return errors.Wrapf(err, "fail to execute helm push' command: %s for url: %s and file: %s", stdErr.String(), repoURL, helmChart.ChartFileName())
+		return errors.Wrapf(err, "fail to execute helm push' command: %s for url: %s and file: %s", stdErr.String(), repoURL, helmChart.ChartFileName()) //nolint:lll
 	}
 
 	return nil
@@ -281,4 +293,24 @@ func removeChartFile(helmChart HelmChart) error {
 	err := os.Remove(chartFileName)
 
 	return errors.Wrapf(err, "fail to delete file %s", chartFileName)
+}
+
+func (l *ProjectsToMigrateList) Set(value string) error {
+	*l = append(*l, value)
+
+	return nil
+}
+
+func (l *ProjectsToMigrateList) String() string {
+	return ""
+}
+
+func (l ProjectsToMigrateList) Includes(a string) bool {
+	for _, b := range l {
+		if b == a {
+			return true
+		}
+	}
+
+	return false
 }
