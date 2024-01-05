@@ -46,6 +46,9 @@ var (
 	harborUsername string //nolint:gochecknoglobals
 	harborPassword string //nolint:gochecknoglobals
 	harborHost     string //nolint:gochecknoglobals
+	destPath       string //nolint:gochecknoglobals
+	page           int64 //nolint:gochecknoglobals
+	pageSize       int64 //nolint:gochecknoglobals
 )
 
 func init() { //nolint:gochecknoinits
@@ -58,6 +61,9 @@ func initFlags() {
 	flag.StringVar(&harborURL, "url", "", "Harbor registry url")
 	flag.StringVar(&harborUsername, "username", "", "Harbor registry username")
 	flag.StringVar(&harborPassword, "password", "", "Harbor registry password")
+	flag.StringVar(&destPath, "destpath", "", "Destination subpath")
+	flag.Int64Var(&page, "page", int64(1), "Page")
+	flag.Int64Var(&pageSize, "pagesize", int64(10), "PageSize")
 	flag.Parse()
 
 	if harborURL == "" {
@@ -90,7 +96,7 @@ func initHarborClients() {
 	harborClientV2Assist = harborClientSet.Assist()
 
 	// Check Harbor url and credentials are ok
-	params := &project.ListProjectsParams{} //nolint:exhaustruct
+	params := &project.ListProjectsParams{Page: &page, PageSize: &pageSize} //nolint:exhaustruct
 	if _, err = harborClientV2.Project.ListProjects(context.Background(), params); err != nil {
 		log.Fatal(errors.Wrap(err, "fail to contact Harbor registry, check your credentials"))
 	}
@@ -140,7 +146,7 @@ func helmLogin() error {
 	cmd.Stderr = &stdErr
 
 	if err := cmd.Run(); err != nil {
-		return errors.Wrapf(err, "fail to execute helm push' command: %s", stdErr.String())
+		return errors.Wrapf(err, "fail to execute helm login' command: %s", stdErr.String())
 	}
 
 	return nil
@@ -149,7 +155,7 @@ func helmLogin() error {
 func getHarborChartmuseumCharts() ([]HelmChart, error) {
 	helmCharts := make([]HelmChart, 0)
 
-	params := &project.ListProjectsParams{} //nolint:exhaustruct
+	params := &project.ListProjectsParams{Page: &page, PageSize: &pageSize} //nolint:exhaustruct
 
 	projects, err := harborClientV2.Project.ListProjects(context.Background(), params)
 	if err != nil {
@@ -186,7 +192,7 @@ func getHarborProjectChartmuseumCharts(projectName string) ([]HelmChart, error) 
 
 		chartVersions, err := harborClientV2Assist.ChartRepository.GetChartrepoRepoChartsName(context.Background(), params)
 		if err != nil {
-			return nil, errors.Wrapf(err, "fail to get chart %s", *chart.Name)
+			return nil, errors.Wrapf(err, "fail to get chart %s in project %s", *chart.Name, projectName)
 		}
 
 		for _, chartVersion := range chartVersions.Payload {
@@ -225,7 +231,7 @@ func pullChartFromChartmuseum(helmChart HelmChart) error {
 
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, http.NoBody)
 	if err != nil {
-		return errors.Wrapf(err, "fail to pull chart from Chartmuseum")
+		return errors.Wrapf(err, "fail to pull chart from Chartmuseum: %s", url)
 	}
 
 	req.SetBasicAuth(harborUsername, harborPassword)
@@ -234,36 +240,36 @@ func pullChartFromChartmuseum(helmChart HelmChart) error {
 
 	res, err := httpClient.Do(req)
 	if err != nil {
-		return errors.Wrapf(err, "fail to retrieve chart from chartmuseum")
+		return errors.Wrapf(err, "fail to retrieve chart from chartmuseum: %s", url)
 	}
 
 	if res.StatusCode != http.StatusOK {
 		err := fmt.Errorf("received status %d", res.StatusCode) //nolint:goerr113
 
-		return errors.Wrap(err, "fail to retrieve chart from chartmuseum")
+		return errors.Wrapf(err, "fail to retrieve chart from chartmuseum: %s", url)
 	}
 
 	defer res.Body.Close()
 
 	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
-		return errors.Wrapf(err, "fail to read chart body")
+		return errors.Wrapf(err, "fail to read chart body: %s", url)
 	}
 
 	err = os.WriteFile(chartFileName, resBody, fileMode)
 
-	return errors.Wrapf(err, "fail to write chart file to disk")
+	return errors.Wrapf(err, "fail to write chart file to disk: %s", url)
 }
 
 func pushChartToOCI(helmChart HelmChart) error {
-	repoURL := fmt.Sprintf("oci://%s/%s", harborHost, helmChart.Project)
+	repoURL := fmt.Sprintf("oci://%s/%s%s", harborHost, helmChart.Project, destPath)
 	cmd := exec.Command(helmBinaryPath, "push", helmChart.ChartFileName(), repoURL) //nolint:gosec
 
 	var stdErr bytes.Buffer
 	cmd.Stderr = &stdErr
 
 	if err := cmd.Run(); err != nil {
-		return errors.Wrapf(err, "fail to execute helm push' command: %s", stdErr.String())
+		return errors.Wrapf(err, "fail to execute helm push' command: %s for url: %s and file: %s", stdErr.String(), repoURL, helmChart.ChartFileName())
 	}
 
 	return nil
