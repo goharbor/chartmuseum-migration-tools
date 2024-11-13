@@ -49,6 +49,7 @@ var (
 	harborUsername    string                //nolint:gochecknoglobals
 	harborPassword    string                //nolint:gochecknoglobals
 	harborHost        string                //nolint:gochecknoglobals
+	destProject       string                //nolint:gochecknoglobals
 	destPath          string                //nolint:gochecknoglobals
 	projectsToMigrate ProjectsToMigrateList //nolint:gochecknoglobals
 )
@@ -63,6 +64,7 @@ func initFlags() {
 	flag.StringVar(&harborURL, "url", "", "Harbor registry url")
 	flag.StringVar(&harborUsername, "username", "", "Harbor registry username")
 	flag.StringVar(&harborPassword, "password", "", "Harbor registry password")
+	flag.StringVar(&destProject, "destproject", "", "Destination project")
 	flag.StringVar(&destPath, "destpath", "", "Destination subpath")
 	flag.Var(&projectsToMigrate, "project", "Name of the project(s) to migrate")
 	flag.Parse()
@@ -274,7 +276,14 @@ func pullChartFromChartmuseum(helmChart HelmChart) error {
 }
 
 func pushChartToOCI(helmChart HelmChart) error {
-	repoURL := fmt.Sprintf("oci://%s/%s%s", harborHost, helmChart.Project, destPath)
+	var harborProject string
+	if destProject != "" {
+		harborProject = destProject
+	} else {
+		harborProject = helmChart.Project
+	}
+
+	repoURL := fmt.Sprintf("oci://%s/%s%s", harborHost, harborProject, destPath)
 	cmd := exec.Command(helmBinaryPath, "push", helmChart.ChartFileName(), repoURL) //nolint:gosec
 
 	var stdErr bytes.Buffer
