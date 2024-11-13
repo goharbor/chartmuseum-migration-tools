@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"cmp"
 	"context"
 	"flag"
 	"fmt"
@@ -277,8 +276,14 @@ func pullChartFromChartmuseum(helmChart HelmChart) error {
 }
 
 func pushChartToOCI(helmChart HelmChart) error {
-	var project = cmp.Or(destProject, helmChart.Project)
-	repoURL := fmt.Sprintf("oci://%s/%s%s", harborHost, project, destPath)
+	var harborProject string
+	if destProject != "" {
+		harborProject = destProject
+	} else {
+		harborProject = helmChart.Project
+	}
+
+	repoURL := fmt.Sprintf("oci://%s/%s%s", harborHost, harborProject, destPath)
 	cmd := exec.Command(helmBinaryPath, "push", helmChart.ChartFileName(), repoURL) //nolint:gosec
 
 	var stdErr bytes.Buffer
