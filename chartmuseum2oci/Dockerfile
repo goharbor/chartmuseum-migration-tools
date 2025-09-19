@@ -1,4 +1,4 @@
-FROM golang:1.20 as builder
+FROM golang:1.20 AS builder
 
 WORKDIR /root/src
 
@@ -17,9 +17,21 @@ RUN go build -a \
 
 FROM alpine AS helm
 
-ARG HELM_VERSION="v3.12.1"
-RUN wget -q https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz -O - \
-    | tar -xzO linux-amd64/helm > /bin/helm && \
+ARG HELM_VERSION="v3.19.0"
+ARG TARGETARCH
+
+# Set default architecture if not provided
+RUN if [ -z "$TARGETARCH" ]; then \
+        ARCH=$(uname -m); \
+        case $ARCH in \
+            x86_64) TARGETARCH=amd64 ;; \
+            aarch64|arm64) TARGETARCH=arm64 ;; \
+            armv7l) TARGETARCH=arm ;; \
+            *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
+        esac; \
+    fi
+    wget -q https://get.helm.sh/helm-${HELM_VERSION}-linux-${TARGETARCH}.tar.gz -O - \
+    | tar -xzO linux-${TARGETARCH}/helm > /bin/helm && \
     chmod +x /bin/helm
 
 ############################
