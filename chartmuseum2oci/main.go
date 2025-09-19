@@ -42,7 +42,7 @@ const (
 	timeout         = 5 * time.Second
 	defaultPageSize = 10
 	// Define minimum required version
-	minVersion = "v3.19.0"
+	helmMinVersion = "v3.19.0"
 )
 
 var (
@@ -135,7 +135,8 @@ func initHarborHost() {
 	harborHost = u.Host
 }
 
-// checkHelmVersion checks if Helm version meets the minimum requirement (>= 3.19.0)
+// checkHelmVersion checks if Helm version meets the minimum requirement
+
 func checkHelmVersion() error {
 	cmd := exec.Command(helmBinaryPath, "version", "--short") //nolint:gosec
 
