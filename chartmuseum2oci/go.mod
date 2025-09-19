@@ -5,6 +5,7 @@ go 1.20
 require (
 	github.com/goharbor/go-client v0.26.2
 	github.com/pkg/errors v0.9.1
+	github.com/rogpeppe/go-internal v1.3.0
 	github.com/schollz/progressbar/v3 v3.13.1
 )
 
