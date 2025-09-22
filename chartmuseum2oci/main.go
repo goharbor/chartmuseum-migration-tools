@@ -51,6 +51,9 @@ var (
 	harborHost        string                //nolint:gochecknoglobals
 	destPath          string                //nolint:gochecknoglobals
 	projectsToMigrate ProjectsToMigrateList //nolint:gochecknoglobals
+
+	insecure  bool //nolint:gochecknoglobals
+	plainHttp bool //nolint:gochecknoglobals
 )
 
 func init() { //nolint:gochecknoinits
@@ -65,6 +68,8 @@ func initFlags() {
 	flag.StringVar(&harborPassword, "password", "", "Harbor registry password")
 	flag.StringVar(&destPath, "destpath", "", "Destination subpath")
 	flag.Var(&projectsToMigrate, "project", "Name of the project(s) to migrate")
+	flag.BoolVar(&insecure, "insecure", false, "Skip TLS verification for helm operations")
+	flag.BoolVar(&plainHttp, "plain-http", false, "Use plain HTTP for helm operations")
 	flag.Parse()
 
 	if harborURL == "" {
@@ -140,8 +145,19 @@ func main() {
 	log.Printf("%d Helm charts successfully migrated from Chartmuseum to OCI", len(helmChartsToMigrate)-errorCount)
 }
 
+// helmLogin performs helm registry login with optional extra arguments
 func helmLogin() error {
-	cmd := exec.Command(helmBinaryPath, "registry", "login", "--username", harborUsername, "--password", harborPassword, harborURL) //nolint:lll
+	params := []string{"registry", "login", "--username", harborUsername, "--password", harborPassword, harborURL}
+	// Add extra arguments if provided
+	if insecure {
+		params = append(params, "--insecure")
+	}
+
+	if plainHttp {
+		params = append(params, "--plain-http")
+	}
+
+	cmd := exec.Command(helmBinaryPath, params...) //nolint:gosec
 
 	var stdErr bytes.Buffer
 	cmd.Stderr = &stdErr
@@ -275,7 +291,16 @@ func pullChartFromChartmuseum(helmChart HelmChart) error {
 
 func pushChartToOCI(helmChart HelmChart) error {
 	repoURL := fmt.Sprintf("oci://%s/%s%s", harborHost, helmChart.Project, destPath)
-	cmd := exec.Command(helmBinaryPath, "push", helmChart.ChartFileName(), repoURL) //nolint:gosec
+	params := []string{"push", helmChart.ChartFileName(), repoURL}
+	if insecure {
+		params = append(params, "--insecure-skip-tls-verify")
+	}
+
+	if plainHttp {
+		params = append(params, "--plain-http")
+	}
+
+	cmd := exec.Command(helmBinaryPath, params...) //nolint:gosec
 
 	var stdErr bytes.Buffer
 	cmd.Stderr = &stdErr
