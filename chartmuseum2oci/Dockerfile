@@ -30,7 +30,7 @@ RUN if [ -z "$TARGETARCH" ]; then \
             *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
         esac; \
     fi
-    wget -q https://get.helm.sh/helm-${HELM_VERSION}-linux-${TARGETARCH}.tar.gz -O - \
+RUN wget -q https://get.helm.sh/helm-${HELM_VERSION}-linux-${TARGETARCH}.tar.gz -O - \
     | tar -xzO linux-${TARGETARCH}/helm > /bin/helm && \
     chmod +x /bin/helm
 
