@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/goharbor/go-client/pkg/harbor"
@@ -19,6 +20,7 @@ import (
 	"github.com/goharbor/go-client/pkg/sdk/v2.0/client"
 	"github.com/goharbor/go-client/pkg/sdk/v2.0/client/project"
 	"github.com/pkg/errors"
+	"github.com/rogpeppe/go-internal/semver"
 	"github.com/schollz/progressbar/v3"
 )
 
@@ -39,6 +41,8 @@ const (
 	helmBinaryPath  = "helm"
 	timeout         = 5 * time.Second
 	defaultPageSize = 10
+	// Define minimum required version
+	helmMinVersion = "v3.19.0"
 )
 
 var (
@@ -52,8 +56,14 @@ var (
 	destPath          string                //nolint:gochecknoglobals
 	projectsToMigrate ProjectsToMigrateList //nolint:gochecknoglobals
 
-	insecure  bool //nolint:gochecknoglobals
-	plainHttp bool //nolint:gochecknoglobals
+	insecure    bool //nolint:gochecknoglobals
+	plainHttp   bool //nolint:gochecknoglobals
+	showVersion bool //nolint:gochecknoglobals
+
+	// Version information set during build
+	version   = "dev"
+	commit    = "unknown"
+	buildDate = "unknown"
 )
 
 func init() { //nolint:gochecknoinits
@@ -70,7 +80,15 @@ func initFlags() {
 	flag.Var(&projectsToMigrate, "project", "Name of the project(s) to migrate")
 	flag.BoolVar(&insecure, "insecure", false, "Skip TLS verification for helm operations")
 	flag.BoolVar(&plainHttp, "plain-http", false, "Use plain HTTP for helm operations")
+	flag.BoolVar(&showVersion, "version", false, "Show version information")
 	flag.Parse()
+
+	if showVersion {
+		fmt.Printf("chartmuseum2oci version %s\n", version)
+		fmt.Printf("commit: %s\n", commit)
+		fmt.Printf("build date: %s\n", buildDate)
+		os.Exit(0)
+	}
 
 	if harborURL == "" {
 		log.Fatal(errors.New("Missing required --url flag"))
@@ -117,7 +135,70 @@ func initHarborHost() {
 	harborHost = u.Host
 }
 
+// checkHelmVersion checks if Helm version meets the minimum requirement
+
+func checkHelmVersion() error {
+	cmd := exec.Command(helmBinaryPath, "version", "--short") //nolint:gosec
+
+	var stdOut, stdErr bytes.Buffer
+	cmd.Stdout = &stdOut
+	cmd.Stderr = &stdErr
+
+	if err := cmd.Run(); err != nil {
+		return errors.Wrapf(err, "fail to execute helm version command: %s", stdErr.String())
+	}
+
+	versionOutput := strings.TrimSpace(stdOut.String())
+
+	// Extract version from output like "v3.19.0+gce43812"
+	versionStr := extractVersionFromOutput(versionOutput)
+	if versionStr == "" {
+		return errors.Errorf("unable to extract version from Helm output: %s", versionOutput)
+	}
+
+	// Validate version format using semver library
+	if !semver.IsValid("v" + versionStr) {
+		return errors.Errorf("invalid Helm version format: %s", versionStr)
+	}
+
+	// Check if version meets minimum requirement
+	if semver.Compare("v"+versionStr, minVersion) < 0 {
+		return errors.Errorf("Helm version %s is too old, requires version >= %s", versionStr, minVersion)
+	}
+
+	log.Printf("Helm version check passed: %s", versionStr)
+	return nil
+}
+
+// extractVersionFromOutput extracts version string from Helm version output
+func extractVersionFromOutput(output string) string {
+	// Handle different Helm version output formats:
+	// - "v3.19.0+gce43812" (with git commit)
+	// - "v3.19.0" (without git commit)
+	// - "3.19.0" (without 'v' prefix)
+
+	// Remove 'v' prefix if present
+	version := strings.TrimPrefix(output, "v")
+
+	// Find the first '+' or end of string to get clean version
+	if plusIndex := strings.Index(version, "+"); plusIndex != -1 {
+		version = version[:plusIndex]
+	}
+
+	// Validate that it looks like a semantic version
+	parts := strings.Split(version, ".")
+	if len(parts) != 3 {
+		return ""
+	}
+
+	return version
+}
+
 func main() {
+	if err := checkHelmVersion(); err != nil {
+		log.Fatal(errors.Wrapf(err, "fail to check Helm version"))
+	}
+
 	if err := helmLogin(); err != nil {
 		log.Fatal(errors.Wrapf(err, "fail to login to Helm"))
 	}
