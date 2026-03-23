@@ -162,8 +162,8 @@ func checkHelmVersion() error {
 	}
 
 	// Check if version meets minimum requirement
-	if semver.Compare("v"+versionStr, minVersion) < 0 {
-		return errors.Errorf("Helm version %s is too old, requires version >= %s", versionStr, minVersion)
+	if semver.Compare("v"+versionStr, helmMinVersion) < 0 {
+		return errors.Errorf("Helm version %s is too old, requires version >= %s", versionStr, helmMinVersion)
 	}
 
 	log.Printf("Helm version check passed: %s", versionStr)
