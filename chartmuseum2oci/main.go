@@ -57,7 +57,7 @@ var (
 	projectsToMigrate ProjectsToMigrateList //nolint:gochecknoglobals
 
 	insecure    bool //nolint:gochecknoglobals
-	plainHttp   bool //nolint:gochecknoglobals
+	plainHTTP   bool //nolint:gochecknoglobals
 	showVersion bool //nolint:gochecknoglobals
 
 	// Version information set during build
@@ -79,7 +79,7 @@ func initFlags() {
 	flag.StringVar(&destPath, "destpath", "", "Destination subpath")
 	flag.Var(&projectsToMigrate, "project", "Name of the project(s) to migrate")
 	flag.BoolVar(&insecure, "insecure", false, "Skip TLS verification for helm operations")
-	flag.BoolVar(&plainHttp, "plain-http", false, "Use plain HTTP for helm operations")
+	flag.BoolVar(&plainHTTP, "plain-http", false, "Use plain HTTP for helm operations")
 	flag.BoolVar(&showVersion, "version", false, "Show version information")
 	flag.Parse()
 
@@ -234,7 +234,7 @@ func helmLogin() error {
 		params = append(params, "--insecure")
 	}
 
-	if plainHttp {
+	if plainHTTP {
 		params = append(params, "--plain-http")
 	}
 
@@ -377,7 +377,7 @@ func pushChartToOCI(helmChart HelmChart) error {
 		params = append(params, "--insecure-skip-tls-verify")
 	}
 
-	if plainHttp {
+	if plainHTTP {
 		params = append(params, "--plain-http")
 	}
 
